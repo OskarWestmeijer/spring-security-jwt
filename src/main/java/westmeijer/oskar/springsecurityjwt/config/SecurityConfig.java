@@ -1,4 +1,4 @@
-package westmeijer.oskar.springsecurityjwt;
+package westmeijer.oskar.springsecurityjwt.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -19,17 +19,17 @@ import static org.springframework.security.config.Customizer.withDefaults;
 public class SecurityConfig {
 
     @Bean
-    public WebSecurityCustomizer webSecurityCustomizer() {
-        return (web) -> web.ignoring()
-                // Spring Security should completely ignore URLs starting with /resources/
-                .requestMatchers("/resources/**");
+    @Order(1)
+    public SecurityFilterChain pingNotSecuredFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatcher("/api/unsecured/**")
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
+        return http.build();
     }
 
     @Bean
-    @Order(1)
+    @Order(2)
     public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
-        http
-                .securityMatcher("/api/**")
+        http.securityMatcher("/api/basic-auth/**")
                 .authorizeHttpRequests(authorize -> authorize
                         .anyRequest().hasRole("ADMIN")
                 )
@@ -37,8 +37,24 @@ public class SecurityConfig {
         return http.build();
     }
 
+
     @Bean
-    @Order(2)
+    @Order(3)
+    // TODO: does not work as expected
+    public SecurityFilterChain h2DbConsoleFilterChain(HttpSecurity http) throws Exception {
+        http.securityMatcher("/h2-console", "/h2-console/**")
+                .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
+        return http.build();
+    }
+
+    @Bean
+    public WebSecurityCustomizer webSecurityCustomizer() {
+        return (web) -> web.ignoring()
+                // Spring Security should completely ignore URLs starting with /resources/
+                .requestMatchers("/resources/**");
+    }
+
+    @Bean
     public SecurityFilterChain formLoginFilterChain(HttpSecurity http) throws Exception {
         http
                 .authorizeHttpRequests(authorize -> authorize
@@ -49,6 +65,7 @@ public class SecurityConfig {
     }
 
     @Bean
+    // TODO: extend with database option?
     public UserDetailsService userDetailsService() {
         UserDetails user = User.withDefaultPasswordEncoder()
                 .username("user")
