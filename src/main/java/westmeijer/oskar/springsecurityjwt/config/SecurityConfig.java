@@ -1,26 +1,28 @@
 package westmeijer.oskar.springsecurityjwt.config;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer;
 import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+
+import javax.sql.DataSource;
 
 import static org.springframework.security.config.Customizer.withDefaults;
 
-@EnableWebSecurity
+@EnableWebSecurity(debug = true)
 @Configuration
 public class SecurityConfig {
 
     @Bean
     @Order(1)
-    public SecurityFilterChain pingNotSecuredFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain unsecuredFilterChain(HttpSecurity http) throws Exception {
         http.securityMatcher("/api/unsecured/**")
                 .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
         return http.build();
@@ -28,7 +30,7 @@ public class SecurityConfig {
 
     @Bean
     @Order(2)
-    public SecurityFilterChain apiFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain basicAuthFilterChain(HttpSecurity http) throws Exception {
         http.securityMatcher("/api/basic-auth/**")
                 .authorizeHttpRequests(authorize -> authorize
                         .anyRequest().hasRole("ADMIN")
@@ -41,17 +43,13 @@ public class SecurityConfig {
     @Bean
     @Order(3)
     // TODO: does not work as expected
-    public SecurityFilterChain h2DbConsoleFilterChain(HttpSecurity http) throws Exception {
-        http.securityMatcher("/h2-console", "/h2-console/**")
-                .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll());
+    public SecurityFilterChain h2ConsoleFilterChain(HttpSecurity http) throws Exception {
+        http.authorizeHttpRequests()
+                .requestMatchers("/h2-console/**")
+                .permitAll();
+        http.csrf()
+                .ignoringRequestMatchers("/h2-console/**");
         return http.build();
-    }
-
-    @Bean
-    public WebSecurityCustomizer webSecurityCustomizer() {
-        return (web) -> web.ignoring()
-                // Spring Security should completely ignore URLs starting with /resources/
-                .requestMatchers("/resources/**");
     }
 
     @Bean
@@ -64,6 +62,7 @@ public class SecurityConfig {
         return http.build();
     }
 
+    /*
     @Bean
     // TODO: extend with database option?
     public UserDetailsService userDetailsService() {
@@ -77,7 +76,23 @@ public class SecurityConfig {
                 .password("password")
                 .roles("ADMIN", "USER")
                 .build();
-        return new InMemoryUserDetailsManager(user, admin);
+        return new JdbcUserDetailsManager(dataSource);
+    }*/
+
+    @Autowired
+    public void configureGlobal(AuthenticationManagerBuilder auth, DataSource dataSource, PasswordEncoder passwordEncoder) throws Exception {
+        auth.jdbcAuthentication()
+                .dataSource(dataSource)
+                .withDefaultSchema()
+                .withUser(User.withUsername("admin")
+                        .password(passwordEncoder.encode("password"))
+                        .roles("ADMIN", "USER"));
     }
+
+    @Bean
+    public static PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+
 
 }
